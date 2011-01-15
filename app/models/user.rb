@@ -12,14 +12,21 @@
 require 'digest'
 class User < ActiveRecord::Base
   attr_accessor :password
-  attr_accessible :name, :email, :password, :password_confirmation
+  attr_accessible :name, :email_address, :password, :password_confirmation
+  
+  
+  ####### ***** IMPORTANT: 
+  #######                   changed :email => :email_address
+  #######                   I think to get the exercise right,
+  #######                  need to change the DB schema to
+  #######                 have :email => :email_address
   
   email_regex = /\A[\w+\-.]+@[a-z\d\-.]+\.[a-z]+\z/i
 
   validates :name,      :presence     => true,
                         :length       => { :maximum => 50 }
   
-  validates :email,     :presence     => true,
+  validates :email_address,     :presence     => true,
                         :format       => { :with => email_regex },
                         :uniqueness   => { :case_sensitive => false }
 
@@ -39,6 +46,56 @@ class User < ActiveRecord::Base
     return nil if user.nil?
     return user if user.has_password?(submitted_password)
   end
+  
+  # CH 7 Exercises
+  ## Ex 1.1
+  def User.authenticate(email, submitted_password)
+    user = find_by_email(email)
+    return nil if user.nil?
+    return user if user.has_password?(submitted_password)
+  end
+  
+  ## Ex 1.2
+  def self.authenticate(email, submitted_password)
+    user = user.find_by_email(email)
+    return nil if user.nil?
+    return user if user.has_password?(submitted_password)
+    return nil
+  end
+  
+  ## Ex 1.3
+  def self.authenticate(email, submitted_password)
+    user = user.find_by_email(email)
+    if user.nil?
+      nil
+    elsif user.has_password?(submitted_password)
+      user
+    else
+      nil
+    end
+  end
+  
+  ## Ex 1.4
+  def self.authenticate(email, submitted_password)
+    user = user.find_by_email(email)
+    if user.nil?
+      nil
+    elsif user.haspassword?(submitted_password)
+      user
+    end
+  end
+  
+  ## Ex 1.5
+  def self.authenticate(email, submitted_password)
+    user = user.find_by_email(email)
+    user && user.has_password?(submitted_password) ? user : nil
+  end
+  
+  
+  
+  
+  
+  
 
 ## PRIVATE METHODS ##
   private
