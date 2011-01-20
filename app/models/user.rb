@@ -85,11 +85,6 @@ class User < ActiveRecord::Base
     user && user.has_password?(submitted_password) ? user : nil
   end
   
-  
-  
-  
-  
-  
 
 ## PRIVATE METHODS ##
   private
