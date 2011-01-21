@@ -1,7 +1,6 @@
 SampleApp::Application.routes.draw do
   resources :users
-  resources :sessions, :only => [:new, :create, :destroy], 
-                       :constraints => { :protocol => "https" }
+  resources :sessions, :only => [:new, :create, :destroy]
 
   match '/contact', :to => 'pages#contact'
   match '/about',   :to => 'pages#about'
