@@ -322,6 +322,12 @@ describe UsersController do
         delete :destroy, :id => @user
         response.should redirect_to(root_path)
       end
+      
+      it "should not show 'delete' user option" do
+        test_sign_in(@user)
+        get :index
+        response.should_not have_selector("a", :content => "delete")        
+      end
     end
     
     describe "as an admin user" do
