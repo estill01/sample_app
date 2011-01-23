@@ -11,8 +11,8 @@ SampleApp::Application.routes.draw do
   match '/signout', :to => 'sessions#destroy'
   
   root :to => 'pages#home'
-  
-  
+    
+  match '/users/:id/create', :to => 'pages#home', :via => :get
   
 
   # The priority is based upon order of creation:
