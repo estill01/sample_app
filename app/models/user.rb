@@ -29,7 +29,6 @@ class User < ActiveRecord::Base
                         :confirmation => true,
                         :length       => { :within => 6..40 }
 
-
   before_save :encrypt_password
 
   def has_password?(submitted_password)
@@ -42,12 +41,15 @@ class User < ActiveRecord::Base
     return user if user.has_password?(submitted_password)
   end
   
-  
   def self.authenticate_with_salt(id, cookie_salt)
     user = find_by_id(id)
     (user && user.salt == cookie_salt) ? user : nil
   end
   
+  def feed
+    # preliminary implementation - full done in ch 12
+    Micropost.where("user_id = ?", id)
+  end
   
   # # CH 7 Exercises
   # ## Ex 1.1
