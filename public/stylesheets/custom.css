@@ -208,10 +208,12 @@ h1.micropost {
 
 table.microposts {
 	margin-top: 1em;
+
 }
 
 table.microposts tr {
 	height: 70px;
+
 }
 
 table.microposts tr td.gravatar {
@@ -224,6 +226,15 @@ table.microposts tr td.micropost {
 	border-top: 1px solid #ccc;
 	vertical-align: top;
 	padding-top: 10px;
+	max-width: 350px;
+	overflow: scroll;
+}
+
+table.microposts tr td.micropost span.content {
+	white-space: pre-line;
+	max-width: 100%;
+	position: relative;
+
 }
 
 table.microposts tr td.micropost span.timestamp {
