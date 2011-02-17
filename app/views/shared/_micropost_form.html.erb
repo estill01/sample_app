@@ -1,8 +1,11 @@
 <%= form_for @micropost do |f| %>
+	<%= javascript_include_tag 'post.js' %>
 	<%= render 'shared/error_messages', :object => f.object %>
 	
 	<div class="field">
 		<%= f.text_area :content %>
+	</div>
+	<div id="counter">
 	</div>
 	<div class="actions">
 		<%= f.submit "Submit" %>

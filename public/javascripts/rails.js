@@ -1,175 +1,270 @@
-(function() {
-  // Technique from Juriy Zaytsev
-  // http://thinkweb2.com/projects/prototype/detecting-event-support-without-browser-sniffing/
-  function isEventSupported(eventName) {
-    var el = document.createElement('div');
-    eventName = 'on' + eventName;
-    var isSupported = (eventName in el);
-    if (!isSupported) {
-      el.setAttribute(eventName, 'return;');
-      isSupported = typeof el[eventName] == 'function';
-    }
-    el = null;
-    return isSupported;
-  }
+ jQuery(function ($) {
+var csrf_token = $('meta[name=csrf-token]').attr('content'),
+csrf_param = $('meta[name=csrf-param]').attr('content');
 
-  function isForm(element) {
-    return Object.isElement(element) && element.nodeName.toUpperCase() == 'FORM'
-  }
+$.fn.extend({
+/**
+* Triggers a custom event on an element and returns the event result
+* this is used to get around not being able to ensure callbacks are placed
+* at the end of the chain.
+*
+* TODO: deprecate with jQuery 1.4.2 release, in favor of subscribing to our
+* own events and placing ourselves at the end of the chain.
+*/
+triggerAndReturn: function (name, data) {
+var event = new $.Event(name);
+this.trigger(event, data);
 
-  function isInput(element) {
-    if (Object.isElement(element)) {
-      var name = element.nodeName.toUpperCase()
-      return name == 'INPUT' || name == 'SELECT' || name == 'TEXTAREA'
-    }
-    else return false
-  }
+return event.result !== false;
+},
 
-  var submitBubbles = isEventSupported('submit'),
-      changeBubbles = isEventSupported('change')
+/**
+* Handles execution of remote calls firing overridable events along the way
+*/
+callRemote: function () {
+var el = this,
+method = el.attr('method') || el.attr('data-method') || 'GET',
+url = el.attr('action') || el.attr('href'),
+dataType = el.attr('data-type') || 'script';
 
-  if (!submitBubbles || !changeBubbles) {
-    // augment the Event.Handler class to observe custom events when needed
-    Event.Handler.prototype.initialize = Event.Handler.prototype.initialize.wrap(
-      function(init, element, eventName, selector, callback) {
-        init(element, eventName, selector, callback)
-        // is the handler being attached to an element that doesn't support this event?
-        if ( (!submitBubbles && this.eventName == 'submit' && !isForm(this.element)) ||
-             (!changeBubbles && this.eventName == 'change' && !isInput(this.element)) ) {
-          // "submit" => "emulated:submit"
-          this.eventName = 'emulated:' + this.eventName
-        }
-      }
-    )
-  }
+if (url === undefined) {
+throw "No URL specified for remote call (action or href must be present).";
+} else {
+if (el.triggerAndReturn('ajax:before')) {
+var data = el.is('form') ? el.serializeArray() : [];
+$.ajax({
+url: url,
+data: data,
+dataType: dataType,
+type: method.toUpperCase(),
+beforeSend: function (xhr) {
+el.trigger('ajax:loading', xhr);
+},
+success: function (data, status, xhr) {
+el.trigger('ajax:success', [data, status, xhr]);
+},
+complete: function (xhr) {
+el.trigger('ajax:complete', xhr);
+},
+error: function (xhr, status, error) {
+el.trigger('ajax:failure', [xhr, status, error]);
+}
+});
+}
 
-  if (!submitBubbles) {
-    // discover forms on the page by observing focus events which always bubble
-    document.on('focusin', 'form', function(focusEvent, form) {
-      // special handler for the real "submit" event (one-time operation)
-      if (!form.retrieve('emulated:submit')) {
-        form.on('submit', function(submitEvent) {
-          var emulated = form.fire('emulated:submit', submitEvent, true)
-          // if custom event received preventDefault, cancel the real one too
-          if (emulated.returnValue === false) submitEvent.preventDefault()
-        })
-        form.store('emulated:submit', true)
-      }
-    })
-  }
+el.trigger('ajax:after');
+}
+}
+});
 
-  if (!changeBubbles) {
-    // discover form inputs on the page
-    document.on('focusin', 'input, select, texarea', function(focusEvent, input) {
-      // special handler for real "change" events
-      if (!input.retrieve('emulated:change')) {
-        input.on('change', function(changeEvent) {
-          input.fire('emulated:change', changeEvent, true)
-        })
-        input.store('emulated:change', true)
-      }
-    })
-  }
-
-  function handleRemote(element) {
-    var method, url, params;
-
-    var event = element.fire("ajax:before");
-    if (event.stopped) return false;
-
-    if (element.tagName.toLowerCase() === 'form') {
-      method = element.readAttribute('method') || 'post';
-      url    = element.readAttribute('action');
-      params = element.serialize();
-    } else {
-      method = element.readAttribute('data-method') || 'get';
-      url    = element.readAttribute('href');
-      params = {};
-    }
-
-    new Ajax.Request(url, {
-      method: method,
-      parameters: params,
-      evalScripts: true,
-
-      onComplete:    function(request) { element.fire("ajax:complete", request); },
-      onSuccess:     function(request) { element.fire("ajax:success",  request); },
-      onFailure:     function(request) { element.fire("ajax:failure",  request); }
-    });
-
-    element.fire("ajax:after");
-  }
-
-  function handleMethod(element) {
-    var method = element.readAttribute('data-method'),
-        url = element.readAttribute('href'),
-        csrf_param = $$('meta[name=csrf-param]')[0],
-        csrf_token = $$('meta[name=csrf-token]')[0];
-
-    var form = new Element('form', { method: "POST", action: url, style: "display: none;" });
-    element.parentNode.insert(form);
-
-    if (method !== 'post') {
-      var field = new Element('input', { type: 'hidden', name: '_method', value: method });
-      form.insert(field);
-    }
-
-    if (csrf_param) {
-      var param = csrf_param.readAttribute('content'),
-          token = csrf_token.readAttribute('content'),
-          field = new Element('input', { type: 'hidden', name: param, value: token });
-      form.insert(field);
-    }
-
-    form.submit();
-  }
+/**
+* confirmation handler
+*/
+$('a[data-confirm],input[data-confirm]').live('click', function () {
+var el = $(this);
+if (el.triggerAndReturn('confirm')) {
+if (!confirm(el.attr('data-confirm'))) {
+return false;
+}
+}
+});
 
 
-  document.on("click", "*[data-confirm]", function(event, element) {
-    var message = element.readAttribute('data-confirm');
-    if (!confirm(message)) event.stop();
-  });
+/**
+* remote handlers
+*/
+$('form[data-remote]').live('submit', function (e) {
+$(this).callRemote();
+e.preventDefault();
+});
 
-  document.on("click", "a[data-remote]", function(event, element) {
-    if (event.stopped) return;
-    handleRemote(element);
-    event.stop();
-  });
+$('a[data-remote],input[data-remote]').live('click', function (e) {
+$(this).callRemote();
+e.preventDefault();
+});
 
-  document.on("click", "a[data-method]", function(event, element) {
-    if (event.stopped) return;
-    handleMethod(element);
-    event.stop();
-  });
+$('a[data-method]:not([data-remote])').live('click', function (e){
+var link = $(this),
+href = link.attr('href'),
+method = link.attr('data-method'),
+form = $('<form method="post" action="'+href+'"></form>'),
+metadata_input = '<input name="_method" value="'+method+'" type="hidden" />';
 
-  document.on("submit", function(event) {
-    var element = event.findElement(),
-        message = element.readAttribute('data-confirm');
-    if (message && !confirm(message)) {
-      event.stop();
-      return false;
-    }
+if (csrf_param != null && csrf_token != null) {
+metadata_input += '<input name="'+csrf_param+'" value="'+csrf_token+'" type="hidden" />';
+}
 
-    var inputs = element.select("input[type=submit][data-disable-with]");
-    inputs.each(function(input) {
-      input.disabled = true;
-      input.writeAttribute('data-original-value', input.value);
-      input.value = input.readAttribute('data-disable-with');
-    });
+form.hide()
+.append(metadata_input)
+.appendTo('body');
 
-    var element = event.findElement("form[data-remote]");
-    if (element) {
-      handleRemote(element);
-      event.stop();
-    }
-  });
+e.preventDefault();
+form.submit();
+});
 
-  document.on("ajax:after", "form", function(event, element) {
-    var inputs = element.select("input[type=submit][disabled=true][data-disable-with]");
-    inputs.each(function(input) {
-      input.value = input.readAttribute('data-original-value');
-      input.removeAttribute('data-original-value');
-      input.disabled = false;
-    });
-  });
-})();
+/**
+* disable-with handlers
+*/
+var disable_with_input_selector = 'input[data-disable-with]';
+var disable_with_form_remote_selector = 'form[data-remote]:has(' + disable_with_input_selector + ')';
+var disable_with_form_not_remote_selector = 'form:not([data-remote]):has(' + disable_with_input_selector + ')';
+
+var disable_with_input_function = function () {
+$(this).find(disable_with_input_selector).each(function () {
+var input = $(this);
+input.data('enable-with', input.val())
+.attr('value', input.attr('data-disable-with'))
+.attr('disabled', 'disabled');
+});
+};
+
+$(disable_with_form_remote_selector).live('ajax:before', disable_with_input_function);
+$(disable_with_form_not_remote_selector).live('submit', disable_with_input_function);
+
+$(disable_with_form_remote_selector).live('ajax:complete', function () {
+$(this).find(disable_with_input_selector).each(function () {
+var input = $(this);
+input.removeAttr('disabled')
+.val(input.data('enable-with'));
+});
+});
+
+});
+
+// /**
+//  * Unobtrusive scripting adapter for jQuery
+//  *
+//  * Requires jQuery 1.4.3 or later.
+//  * https://github.com/rails/jquery-ujs
+//  */
+// 
+// (function($) {
+// 	// Triggers an event on an element and returns the event result
+// 	function fire(obj, name, data) {
+// 		var event = new $.Event(name);
+// 		obj.trigger(event, data);
+// 		return event.result !== false;
+// 	}
+// 
+// 	// Submits "remote" forms and links with ajax
+// 	function handleRemote(element) {
+// 		var method, url, data,
+// 			dataType = element.attr('data-type') || ($.ajaxSettings && $.ajaxSettings.dataType);
+// 
+// 		if (element.is('form')) {
+// 			method = element.attr('method');
+// 			url = element.attr('action');
+// 			data = element.serializeArray();
+// 			// memoized value from clicked submit button
+// 			var button = element.data('ujs:submit-button');
+// 			if (button) {
+// 				data.push(button);
+// 				element.data('ujs:submit-button', null);
+// 			}
+// 		} else {
+// 			method = element.attr('data-method');
+// 			url = element.attr('href');
+// 			data = null;
+// 		}
+// 
+// 		$.ajax({
+// 			url: url, type: method || 'GET', data: data, dataType: dataType,
+// 			// stopping the "ajax:beforeSend" event will cancel the ajax request
+// 			beforeSend: function(xhr, settings) {
+// 				if (settings.dataType === undefined) {
+// 					xhr.setRequestHeader('accept', '*/*;q=0.5, ' + settings.accepts.script);
+// 				}
+// 				return fire(element, 'ajax:beforeSend', [xhr, settings]);
+// 			},
+// 			success: function(data, status, xhr) {
+// 				element.trigger('ajax:success', [data, status, xhr]);
+// 			},
+// 			complete: function(xhr, status) {
+// 				element.trigger('ajax:complete', [xhr, status]);
+// 			},
+// 			error: function(xhr, status, error) {
+// 				element.trigger('ajax:error', [xhr, status, error]);
+// 			}
+// 		});
+// 	}
+// 
+// 	// Handles "data-method" on links such as:
+// 	// <a href="/users/5" data-method="delete" rel="nofollow" data-confirm="Are you sure?">Delete</a>
+// 	function handleMethod(link) {
+// 		var href = link.attr('href'),
+// 			method = link.attr('data-method'),
+// 			csrf_token = $('meta[name=csrf-token]').attr('content'),
+// 			csrf_param = $('meta[name=csrf-param]').attr('content'),
+// 			form = $('<form method="post" action="' + href + '"></form>'),
+// 			metadata_input = '<input name="_method" value="' + method + '" type="hidden" />';
+// 
+// 		if (csrf_param !== undefined && csrf_token !== undefined) {
+// 			metadata_input += '<input name="' + csrf_param + '" value="' + csrf_token + '" type="hidden" />';
+// 		}
+// 
+// 		form.hide().append(metadata_input).appendTo('body');
+// 		form.submit();
+// 	}
+// 
+// 	function disableFormElements(form) {
+// 		form.find('input[data-disable-with]').each(function() {
+// 			var input = $(this);
+// 			input.data('ujs:enable-with', input.val())
+// 				.val(input.attr('data-disable-with'))
+// 				.attr('disabled', 'disabled');
+// 		});
+// 	}
+// 
+// 	function enableFormElements(form) {
+// 		form.find('input[data-disable-with]').each(function() {
+// 			var input = $(this);
+// 			input.val(input.data('ujs:enable-with')).removeAttr('disabled');
+// 		});
+// 	}
+// 
+// 	function allowAction(element) {
+// 		var message = element.attr('data-confirm');
+// 		return !message || (fire(element, 'confirm') && confirm(message));
+// 	}
+// 
+// 	$('a[data-confirm], a[data-method], a[data-remote]').live('click.rails', function(e) {
+// 		var link = $(this);
+// 		if (!allowAction(link)) return false;
+// 
+// 		if (link.attr('data-remote')) {
+// 			handleRemote(link);
+// 			return false;
+// 		} else if (link.attr('data-method')) {
+// 			handleMethod(link);
+// 			return false;
+// 		}
+// 	});
+// 
+// 	$('form').live('submit.rails', function(e) {
+// 		var form = $(this);
+// 		if (!allowAction(form)) return false;
+// 
+// 		if (form.attr('data-remote')) {
+// 			handleRemote(form);
+// 			return false;
+// 		} else {
+// 			disableFormElements(form);
+// 		}
+// 	});
+// 
+// 	$('form input[type=submit], form button[type=submit], form button:not([type])').live('click.rails', function() {
+// 		var button = $(this);
+// 		if (!allowAction(button)) return false;
+// 		// register the pressed submit button
+// 		var name = button.attr('name'), data = name ? {name:name, value:button.val()} : null;
+// 		button.closest('form').data('ujs:submit-button', data);
+// 	});
+// 	
+// 	$('form').live('ajax:beforeSend.rails', function(event) {
+// 		if (this == event.target) disableFormElements($(this));
+// 	});
+// 
+// 	$('form').live('ajax:complete.rails', function(event) {
+// 		if (this == event.target) enableFormElements($(this));
+// 	});
+// })( jQuery );
